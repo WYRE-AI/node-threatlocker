@@ -1,6 +1,6 @@
 {
   "name": "@wyre-ai/node-threatlocker",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Node.js client library for the ThreatLocker Portal API",
   "type": "module",
   "main": "./dist/index.cjs",

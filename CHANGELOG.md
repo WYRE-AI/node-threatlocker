@@ -1,3 +1,10 @@
+## [1.0.6](https://github.com/WYRE-AI/node-threatlocker/compare/v1.0.5...v1.0.6) (2026-08-25)
+
+
+### Bug Fixes
+
+* migrate to WYRE-AI org (npm scope, ghcr namespace, registry) ([#25](https://github.com/WYRE-AI/node-threatlocker/issues/25)) ([04190b0](https://github.com/WYRE-AI/node-threatlocker/commit/04190b0c898faf44b045f4ee4c7b229db76b191f))
+
 ## [1.0.5](https://github.com/wyre-technology/node-threatlocker/compare/v1.0.4...v1.0.5) (2026-08-13)
 
 
