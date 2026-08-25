@@ -1,12 +1,12 @@
 # node-threatlocker
 
-[![Build Status](https://github.com/wyre-technology/node-threatlocker/actions/workflows/release.yml/badge.svg)](https://github.com/wyre-technology/node-threatlocker/actions/workflows/release.yml)
+[![Build Status](https://github.com/WYRE-AI/node-threatlocker/actions/workflows/release.yml/badge.svg)](https://github.com/WYRE-AI/node-threatlocker/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
 
 Node.js client library for the [ThreatLocker](https://www.threatlocker.com) Portal API. Zero production dependencies — uses native `fetch` (Node 18+).
 
-> **Note:** This project is maintained by [Wyre Technology](https://github.com/wyre-technology).
+> **Note:** This project is maintained by [WYRE-AI](https://github.com/WYRE-AI).
 
 ## Features
 
@@ -20,7 +20,7 @@ Node.js client library for the [ThreatLocker](https://www.threatlocker.com) Port
 ## Installation
 
 ```bash
-npm install @wyre-technology/node-threatlocker
+npm install @wyre-ai/node-threatlocker
 ```
 
 ### Registry Configuration
@@ -28,14 +28,14 @@ npm install @wyre-technology/node-threatlocker
 This package is published to GitHub Packages. Add this to your `.npmrc`:
 
 ```
-@wyre-technology:registry=https://npm.pkg.github.com
+@wyre-ai:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
 ```
 
 ## Quick Start
 
 ```typescript
-import { ThreatLockerClient } from '@wyre-technology/node-threatlocker';
+import { ThreatLockerClient } from '@wyre-ai/node-threatlocker';
 
 const client = new ThreatLockerClient({
   apiKey: 'your-api-key',
@@ -170,7 +170,7 @@ import {
   ValidationError, 
   RateLimitError, 
   ServerError 
-} from '@wyre-technology/node-threatlocker';
+} from '@wyre-ai/node-threatlocker';
 
 try {
   await client.computers.get(999999);

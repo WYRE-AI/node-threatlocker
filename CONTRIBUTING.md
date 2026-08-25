@@ -10,7 +10,7 @@ Thank you for your interest in contributing to the ThreatLocker Node.js SDK!
 
 2. **Clone and install**
    ```bash
-   git clone https://github.com/wyre-technology/node-threatlocker.git
+   git clone https://github.com/WYRE-AI/node-threatlocker.git
    cd node-threatlocker
    npm ci
    ```
