@@ -167,3 +167,117 @@ describe('auditLog.search — date-range + paramsFieldsDto + usenewsearch contra
     expect(seen[0].body.endDate).toBe('2026-08-09T00:00:00Z');
   });
 });
+
+describe('organization-scoping header contract', () => {
+  // Confirmed against the live API's OpenAPI security schemes
+  // (portalapi.*.threatlocker.com/swagger) and the official docs
+  // (threatlocker.kb.help/portalapiorganization,
+  // /processing-application-control-approval-requests-through-api): the
+  // header is `ManagedOrganizationId`, not `OrganizationId`. The wrong
+  // header name is silently ignored by the real API, so requests fall back
+  // to the API key's default/home organization — this is what caused
+  // computerGroups.list() and organizations.getAuthKey() to silently return
+  // empty results for MSP accounts querying a non-default org.
+  it('sends ManagedOrganizationId (not OrganizationId) when an organizationId is configured', async () => {
+    const scopedClient = new ThreatLockerClient({
+      apiKey: 'test-api-key',
+      organizationId: 'org-guid-123',
+    });
+    let sentHeaders: Headers | undefined;
+    server.use(
+      http.post(`${BASE_URL}/Computer/ComputerGetByAllParameters`, ({ request }) => {
+        sentHeaders = request.headers;
+        return HttpResponse.json([], { headers: { pagination: paginationHeader(0) } });
+      }),
+    );
+    await scopedClient.computers.list();
+    expect(sentHeaders?.get('managedorganizationid')).toBe('org-guid-123');
+    expect(sentHeaders?.get('organizationid')).toBeNull();
+  });
+
+  it('omits the header entirely when no organizationId is configured', async () => {
+    let sentHeaders: Headers | undefined;
+    server.use(
+      http.post(`${BASE_URL}/Computer/ComputerGetByAllParameters`, ({ request }) => {
+        sentHeaders = request.headers;
+        return HttpResponse.json([], { headers: { pagination: paginationHeader(0) } });
+      }),
+    );
+    await client.computers.list();
+    expect(sentHeaders?.get('managedorganizationid')).toBeNull();
+  });
+});
+
+describe('computers.getCheckins — computerId contract', () => {
+  // Confirmed against the official ThreatLocker Postman collection:
+  // ComputerCheckinGetByParameters's body is { computerId (GUID), pageNumber,
+  // pageSize, hideHeartbeat } — computerId is required. The generic
+  // buildSearchBody() helper (isAscending/orderBy/searchText/
+  // childOrganizations) doesn't carry computerId at all, so it was silently
+  // dropped and the real API rejected the request as a 400 Bad Request.
+  it('includes computerId in the outgoing body', async () => {
+    let sentBody: any;
+    server.use(
+      http.post(`${BASE_URL}/ComputerCheckin/ComputerCheckinGetByParameters`, async ({ request }) => {
+        sentBody = await request.json();
+        return HttpResponse.json([], { headers: { pagination: paginationHeader(0) } });
+      }),
+    );
+    await client.computers.getCheckins({ computerId: 'computer-guid-456' });
+    expect(sentBody.computerId).toBe('computer-guid-456');
+  });
+
+  it('the real API 400s when computerId is missing (regression guard for the dropped-field bug)', async () => {
+    server.use(
+      http.post(`${BASE_URL}/ComputerCheckin/ComputerCheckinGetByParameters`, async ({ request }) => {
+        const body: any = await request.json();
+        if (!body.computerId) {
+          return HttpResponse.json({ Message: 'computerId is required' }, { status: 400 });
+        }
+        return HttpResponse.json([], { headers: { pagination: paginationHeader(0) } });
+      }),
+    );
+    await expect(client.computers.getCheckins({ computerId: 'computer-guid-456' })).resolves.toBeDefined();
+    await expect(client.computers.getCheckins()).rejects.toThrow(/bad request/i);
+  });
+});
+
+describe('computerGroups.list / getDropdown — bare-array contract', () => {
+  // Same bare-array behavior as the other list endpoints (see top of file) —
+  // computer-groups was missed when the rest of the SDK was updated for
+  // this, so `response.groups` was always undefined on the real API and
+  // every call silently returned [].
+  it('list() unwraps a bare array response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/ComputerGroup/ComputerGroupGetGroupAndComputer`, () =>
+        HttpResponse.json([
+          { id: 1, name: 'Workstations', organizationId: 1 },
+          { id: 2, name: 'Servers', organizationId: 1 },
+        ]),
+      ),
+    );
+    const groups = await client.computerGroups.list();
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.name)).toEqual(['Workstations', 'Servers']);
+  });
+
+  it('getDropdown() unwraps a bare array response', async () => {
+    server.use(
+      http.get(`${BASE_URL}/ComputerGroup/ComputerGroupGetDropdownByOrganizationId`, () =>
+        HttpResponse.json([{ id: 1, name: 'Workstations', organizationId: 1 }]),
+      ),
+    );
+    const groups = await client.computerGroups.getDropdown();
+    expect(groups).toHaveLength(1);
+  });
+
+  it('still supports an object-wrapped { groups: [...] } response as a defensive fallback', async () => {
+    server.use(
+      http.get(`${BASE_URL}/ComputerGroup/ComputerGroupGetGroupAndComputer`, () =>
+        HttpResponse.json({ groups: [{ id: 1, name: 'Workstations', organizationId: 1 }] }),
+      ),
+    );
+    const groups = await client.computerGroups.list();
+    expect(groups).toHaveLength(1);
+  });
+});

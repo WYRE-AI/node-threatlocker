@@ -22,11 +22,23 @@ export class ComputersResource {
   }
 
   async getCheckins(params: ComputerCheckinParams = {}): Promise<PaginatedResponse<ComputerCheckin>> {
-    const body = buildSearchBody(params);
+    // ComputerCheckinGetByParameters has its own body shape (computerId,
+    // pageNumber, pageSize) — it does not accept the generic search fields
+    // (isAscending, orderBy, searchText, childOrganizations) that
+    // buildSearchBody() produces for other resources, and critically
+    // requires `computerId`, which buildSearchBody() would silently drop
+    // (confirmed against the official ThreatLocker Postman collection).
+    const pageNumber = params.pageNumber ?? 1;
+    const pageSize = params.pageSize ?? 25;
+    const body = {
+      computerId: params.computerId,
+      pageNumber,
+      pageSize,
+    };
     const { data, pagination } = await this.http.requestWithMeta<any>('/ComputerCheckin/ComputerCheckinGetByParameters', {
       method: 'POST',
       body,
     });
-    return unwrapPaginatedResponse<ComputerCheckin>(data, body.pageNumber, body.pageSize, pagination);
+    return unwrapPaginatedResponse<ComputerCheckin>(data, pageNumber, pageSize, pagination);
   }
 }
