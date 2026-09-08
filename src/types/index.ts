@@ -25,7 +25,8 @@ export interface ComputerCheckin {
 }
 
 export interface ComputerCheckinParams extends Partial<PaginationParams> {
-  computerId?: number;
+  // ThreatLocker computer IDs are GUIDs, not numeric IDs.
+  computerId?: string;
   fromDate?: string;
   toDate?: string;
 }
@@ -84,6 +85,9 @@ export interface PermitApplication {
 
 // Audit Log types
 export interface AuditLogEntry {
+  // Note: ThreatLocker's ActionLogGetByIdV2 endpoint takes actionLogId as a
+  // GUID string (confirmed against the official Postman collection), not a
+  // numeric id — see AuditLogResource.get().
   id: number;
   actionType: string;
   timestamp: string;

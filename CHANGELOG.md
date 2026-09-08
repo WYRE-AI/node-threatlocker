@@ -59,6 +59,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `HttpClient` sent the organization-scoping header as `OrganizationId`,
+  which the real ThreatLocker Portal API does not recognize — the correct
+  header is `ManagedOrganizationId` (confirmed against the live API's
+  OpenAPI security schemes and official docs). The wrong name was silently
+  ignored, so every request fell back to the API key's default/home
+  organization instead of the configured one. This caused
+  `computerGroups.list()`/`getDropdown()` to return empty results for
+  organizations whose groups live under a non-default (child) org, and
+  `organizations.getAuthKey()` to return an empty key when the default org
+  has none generated.
+- `computers.getCheckins()` dropped the required `computerId` field entirely
+  — it built its request body with the generic `buildSearchBody()` helper,
+  which only carries pagination fields, so every checkin lookup sent a body
+  without `computerId` and the API rejected it as a 400 Bad Request.
+  `getCheckins()` now builds its body directly from the confirmed real
+  contract (`computerId`, `pageNumber`, `pageSize`).
+- `computerGroups.list()` and `getDropdown()` assumed the response was
+  wrapped as `{ groups: [...] }`, but (like every other portalapi list
+  endpoint, see the `real-api-contracts` tests) the real API returns a bare
+  JSON array — `computer-groups.ts` was missed when the rest of the SDK was
+  updated for this in v1.0.4, so every call silently returned `[]` even for
+  organizations with computer groups. Object-wrapped shapes are kept as a
+  defensive fallback.
+- `ComputerCheckinParams.computerId` and `AuditLogEntry`'s `actionLogId`
+  lookup were typed as `number`; ThreatLocker IDs for these fields are GUID
+  strings. Corrected the types to match (no runtime behavior change, since
+  the values already flowed through as strings — a documentation/type-safety
+  fix to prevent a future caller from passing a numeric id).
 - Published npm tarball was missing compiled `dist/` output, causing
   `ERR_MODULE_NOT_FOUND` in consumers. Added an explicit `files` field
   (`["dist"]`) so packaging no longer falls back to `.gitignore` (which

@@ -94,9 +94,14 @@ export class HttpClient {
         ...options.headers,
       };
 
-      // Add organization header if provided
+      // Add organization-scoping header if provided. ThreatLocker's Portal API
+      // scopes requests to a specific (child) organization via the
+      // `ManagedOrganizationId` header (confirmed against the live API's
+      // OpenAPI security schemes and official docs) — NOT `OrganizationId`,
+      // which the API does not recognize and silently ignores, causing
+      // requests to fall back to the API key's default/home organization.
       if (this.organizationId) {
-        headers['OrganizationId'] = this.organizationId;
+        headers['ManagedOrganizationId'] = this.organizationId;
       }
 
       if (body) headers['Content-Type'] = 'application/json';
