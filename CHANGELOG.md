@@ -1,3 +1,5 @@
+> Release notes from 1.0.7 onward are published on the [GitHub Releases page](https://github.com/WYRE-AI/node-threatlocker/releases) instead of here. `@semantic-release/git` was removed from `.releaserc.json` because it tried to push the version bump directly to `main`, which branch protection (added as part of the WYRE-AI org migration, 1.0.6) correctly rejects — semantic-release still bumps and publishes the package version correctly, it just no longer commits that bump back to this file. The history below (1.0.6 and earlier) is kept as the record.
+
 ## [1.0.6](https://github.com/WYRE-AI/node-threatlocker/compare/v1.0.5...v1.0.6) (2026-08-25)
 
 
