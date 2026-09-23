@@ -61,6 +61,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `auditLog.getFileHistory()` sent only `fullPath` to
+  `ActionLogGetAllForFileHistoryV2`. The OpenAPI spec marks every query
+  parameter optional, but the live Portal API returns HTTP 417
+  "Missing Parameters. Unable to load details." unless `fullPath` plus
+  `hostname` or `computerId` is supplied (WYREAI-386 / EpiOn
+  `threatlocker_audit_file_history`). The method now takes
+  `{ fullPath, hostname?, computerId? }` and throws before the request
+  when `fullPath` or both identifiers are missing. A bare-array response
+  is unwrapped, with the previous `{ logs }` shape kept as a fallback.
 - `HttpClient` sent the organization-scoping header as `OrganizationId`,
   which the real ThreatLocker Portal API does not recognize — the correct
   header is `ManagedOrganizationId` (confirmed against the live API's

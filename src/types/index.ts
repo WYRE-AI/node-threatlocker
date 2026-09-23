@@ -110,6 +110,30 @@ export interface AuditLogSearchParams extends Partial<PaginationParams> {
   computerId?: number;
 }
 
+/**
+ * Query for `ActionLogGetAllForFileHistoryV2`.
+ *
+ * The published OpenAPI spec marks every parameter optional, but the live
+ * Portal API returns HTTP 417 "Missing Parameters. Unable to load details."
+ * unless `fullPath` plus one of `hostname` or `computerId` is present.
+ */
+export interface FileHistoryParams {
+  /** Full file path. Required. */
+  fullPath: string;
+  /**
+   * Computer hostname. Required unless `computerId` is set.
+   */
+  hostname?: string;
+  /**
+   * Computer GUID (not a numeric id). Required unless `hostname` is set.
+   */
+  computerId?: string;
+  /** ActionLog = 1, DenyActionLog = 2, BaselineActionLog = 3, EventLogActionLog = 4. */
+  sourceTableId?: number;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
 // Organization types
 export interface Organization {
   id: number;

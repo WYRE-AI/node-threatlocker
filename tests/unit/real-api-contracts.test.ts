@@ -168,6 +168,129 @@ describe('auditLog.search — date-range + paramsFieldsDto + usenewsearch contra
   });
 });
 
+describe('auditLog.getFileHistory — fullPath + hostname|computerId contract', () => {
+  // OpenAPI (ActionLogGetAllForFileHistoryV2, "Get All File History by
+  // hostname and fullpath") lists fullPath, hostname, and computerId (UUID)
+  // as optional query params. The live API returns HTTP 417
+  // "Missing Parameters. Unable to load details." unless fullPath plus one
+  // of hostname or computerId is actually sent. WYREAI-386 / EpiOn:
+  // getFileHistory(fullPath) forwarded only fullPath.
+  const arm = (mode: 'ok' | 'enforce-417' = 'ok') => {
+    const seen: URL[] = [];
+    server.use(
+      http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, ({ request }) => {
+        const url = new URL(request.url);
+        seen.push(url);
+        const fullPath = url.searchParams.get('fullPath');
+        const hostname = url.searchParams.get('hostname');
+        const computerId = url.searchParams.get('computerId');
+        if (mode === 'enforce-417' && (!fullPath || (!hostname && !computerId))) {
+          return HttpResponse.json(
+            { LoggerId: 'x', StatusCode: 417, Message: 'Missing Parameters. Unable to load details.' },
+            { status: 417 },
+          );
+        }
+        return HttpResponse.json([{ actionType: 'Execute', fullPath: fullPath ?? '' }]);
+      }),
+    );
+    return seen;
+  };
+
+  it('sends fullPath and hostname as query params', async () => {
+    const seen = arm();
+    const result = await client.auditLog.getFileHistory({
+      fullPath: 'C:\\Windows\\System32\\notepad.exe',
+      hostname: 'WS-01',
+    });
+    const url = seen[0];
+    expect(url.searchParams.get('fullPath')).toBe('C:\\Windows\\System32\\notepad.exe');
+    expect(url.searchParams.get('hostname')).toBe('WS-01');
+    expect(url.searchParams.get('computerId')).toBeNull();
+    expect(result).toHaveLength(1);
+  });
+
+  it('sends computerId when hostname is omitted', async () => {
+    const seen = arm();
+    await client.auditLog.getFileHistory({
+      fullPath: 'C:\\app.exe',
+      computerId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    });
+    expect(seen[0].searchParams.get('fullPath')).toBe('C:\\app.exe');
+    expect(seen[0].searchParams.get('computerId')).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+    expect(seen[0].searchParams.get('hostname')).toBeNull();
+  });
+
+  it('sends both identifiers and optional paging params when supplied', async () => {
+    const seen = arm();
+    await client.auditLog.getFileHistory({
+      fullPath: 'C:\\app.exe',
+      hostname: '  WS-01  ',
+      computerId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      sourceTableId: 2,
+      pageNumber: 3,
+      pageSize: 50,
+    });
+    const params = seen[0].searchParams;
+    expect(params.get('hostname')).toBe('WS-01');
+    expect(params.get('computerId')).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+    expect(params.get('sourceTableId')).toBe('2');
+    expect(params.get('pageNumber')).toBe('3');
+    expect(params.get('pageSize')).toBe('50');
+  });
+
+  it('unwraps a { logs } body as well as a bare array', async () => {
+    server.use(
+      http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, () =>
+        HttpResponse.json({ logs: [{ actionType: 'Execute', fullPath: 'C:\\app.exe' }] }),
+      ),
+    );
+    const result = await client.auditLog.getFileHistory({
+      fullPath: 'C:\\app.exe',
+      hostname: 'WS-01',
+    });
+    expect(result).toEqual([{ actionType: 'Execute', fullPath: 'C:\\app.exe' }]);
+  });
+
+  it('rejects a bare fullPath string before any request', async () => {
+    const seen = arm('enforce-417');
+    await expect(
+      client.auditLog.getFileHistory('C:\\app.exe' as unknown as { fullPath: string }),
+    ).rejects.toThrow(/fullPath and either hostname or computerId/i);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('rejects a missing computer identifier before any request', async () => {
+    const seen = arm('enforce-417');
+    await expect(client.auditLog.getFileHistory({ fullPath: 'C:\\app.exe' })).rejects.toThrow(/417/);
+    await expect(
+      client.auditLog.getFileHistory({ fullPath: 'C:\\app.exe', hostname: '   ', computerId: '' }),
+    ).rejects.toThrow(/Missing Parameters/);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('rejects a blank fullPath before any request', async () => {
+    const seen = arm('enforce-417');
+    await expect(
+      client.auditLog.getFileHistory({ fullPath: '  ', hostname: 'WS-01' }),
+    ).rejects.toThrow(/fullPath/);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('does not hit the live 417 when hostname or computerId is present', async () => {
+    const seen = arm('enforce-417');
+    await expect(
+      client.auditLog.getFileHistory({ fullPath: 'C:\\app.exe', hostname: 'WS-01' }),
+    ).resolves.toHaveLength(1);
+    await expect(
+      client.auditLog.getFileHistory({
+        fullPath: 'C:\\app.exe',
+        computerId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      }),
+    ).resolves.toHaveLength(1);
+    expect(seen).toHaveLength(2);
+  });
+});
+
 describe('organization-scoping header contract', () => {
   // Confirmed against the live API's OpenAPI security schemes
   // (portalapi.*.threatlocker.com/swagger) and the official docs

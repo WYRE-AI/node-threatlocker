@@ -65,6 +65,13 @@ const { items: logs } = await client.auditLog.search({
   fromDate: '2024-01-01',
   toDate: '2024-12-31',
 });
+
+// File history for one path. fullPath plus hostname or computerId is required;
+// the Portal API returns HTTP 417 Missing Parameters when only fullPath is sent.
+const history = await client.auditLog.getFileHistory({
+  fullPath: 'C:\\Windows\\System32\\notepad.exe',
+  hostname: 'WS-01',
+});
 ```
 
 ## Authentication
@@ -103,7 +110,7 @@ const client = new ThreatLockerClient({
 | `computers` | `list()`, `get(id)`, `getCheckins()` | Manage computers and check-ins |
 | `computerGroups` | `list()`, `getDropdown()` | Computer group management |
 | `approvalRequests` | `list()`, `get(id)`, `getPendingCount()`, `getPermitApplication(id)` | Application approval workflow |
-| `auditLog` | `search()`, `get(id)`, `getFileHistory(path)` | Unified audit and action logs |
+| `auditLog` | `search()`, `get(id)`, `getFileHistory({ fullPath, hostname \| computerId })` | Unified audit and action logs |
 | `organizations` | `listChildren()`, `getAuthKey()`, `listForMoveComputers()` | Organization management |
 
 ### Multi-Tenant Operations

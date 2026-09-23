@@ -136,8 +136,19 @@ export const handlers = [
     });
   }),
 
-  http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, () =>
-    HttpResponse.json({
+  http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, ({ request }) => {
+    const url = new URL(request.url);
+    const fullPath = url.searchParams.get('fullPath');
+    const hostname = url.searchParams.get('hostname');
+    const computerId = url.searchParams.get('computerId');
+    // Live API: 417 "Missing Parameters" unless fullPath plus hostname or computerId.
+    if (!fullPath || (!hostname && !computerId)) {
+      return HttpResponse.json(
+        { LoggerId: 'x', StatusCode: 417, Message: 'Missing Parameters. Unable to load details.' },
+        { status: 417 },
+      );
+    }
+    return HttpResponse.json({
       logs: [
         {
           id: 1,
@@ -149,8 +160,8 @@ export const handlers = [
           details: { filePath: 'C:\\Windows\\System32\\notepad.exe' },
         },
       ],
-    })
-  ),
+    });
+  }),
 
   // Organizations
   http.post(`${BASE_URL}/Organization/OrganizationGetChildOrganizationsByParameters`, () =>

@@ -1,5 +1,5 @@
 import type { HttpClient } from '../http.js';
-import type { AuditLogEntry, AuditLogSearchParams, PaginatedResponse } from '../types/index.js';
+import type { AuditLogEntry, AuditLogSearchParams, FileHistoryParams, PaginatedResponse } from '../types/index.js';
 import { unwrapPaginatedResponse } from '../pagination.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -50,10 +50,59 @@ export class AuditLogResource {
     });
   }
 
-  async getFileHistory(fullPath: string): Promise<AuditLogEntry[]> {
-    const response = await this.http.request<{ logs?: AuditLogEntry[] }>('/ActionLog/ActionLogGetAllForFileHistoryV2', {
-      params: { fullPath },
-    });
-    return response.logs || [];
+  /**
+   * File history for one path on one computer.
+   *
+   * `GET /ActionLog/ActionLogGetAllForFileHistoryV2` (OpenAPI: "Get All File
+   * History by hostname and fullpath"). Query params are `fullPath`,
+   * `hostname`, `computerId` (UUID), plus optional `sourceTableId`,
+   * `pageNumber`, `pageSize`. The spec lists them all as optional; the live
+   * API returns HTTP 417 "Missing Parameters. Unable to load details." unless
+   * `fullPath` and at least one of `hostname` or `computerId` are sent.
+   * Incomplete calls throw here and are not sent.
+   */
+  async getFileHistory(params: FileHistoryParams): Promise<AuditLogEntry[]> {
+    const query = fileHistoryQuery(params);
+    const response = await this.http.request<AuditLogEntry[] | { logs?: AuditLogEntry[] }>(
+      '/ActionLog/ActionLogGetAllForFileHistoryV2',
+      { params: query },
+    );
+    // Sibling list endpoints return a bare JSON array. This method originally
+    // unwrapped `{ logs }`; keep that shape as a fallback.
+    if (Array.isArray(response)) return response;
+    return response?.logs ?? [];
   }
+}
+
+const FILE_HISTORY_PARAM_ERROR =
+  'auditLog.getFileHistory requires fullPath and either hostname or computerId. ' +
+  'ActionLogGetAllForFileHistoryV2 returns HTTP 417 "Missing Parameters. Unable to load details." ' +
+  'when only fullPath is sent. Pass { fullPath, hostname } or { fullPath, computerId }.';
+
+function nonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function fileHistoryQuery(params: FileHistoryParams): Record<string, unknown> {
+  // A string (the previous signature) has typeof 'string', so this also
+  // rejects getFileHistory(fullPath) instead of forwarding a bad request.
+  if (typeof params !== 'object' || params === null) {
+    throw new Error(FILE_HISTORY_PARAM_ERROR);
+  }
+  const fullPath = nonEmptyString(params.fullPath);
+  const hostname = nonEmptyString(params.hostname);
+  const computerId = nonEmptyString(params.computerId);
+  if (!fullPath || (!hostname && !computerId)) {
+    throw new Error(FILE_HISTORY_PARAM_ERROR);
+  }
+
+  const query: Record<string, unknown> = { fullPath };
+  if (hostname) query.hostname = hostname;
+  if (computerId) query.computerId = computerId;
+  if (params.sourceTableId != null) query.sourceTableId = params.sourceTableId;
+  if (params.pageNumber != null) query.pageNumber = params.pageNumber;
+  if (params.pageSize != null) query.pageSize = params.pageSize;
+  return query;
 }
