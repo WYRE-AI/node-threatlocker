@@ -1,6 +1,7 @@
 import type { HttpClient } from '../http.js';
 import type {
   AuditLogEntry,
+  AuditLogEntryV2,
   AuditLogGetOptions,
   AuditLogSearchParams,
   FileHistoryParams,
@@ -63,14 +64,14 @@ export class AuditLogResource {
    * 3 BaselineActionLog, 4 EventLogActionLog). It is forwarded only when
    * the caller sets it; a default of 2 would miss rows from the other tables.
    */
-  async get(id: string | number, options?: AuditLogGetOptions): Promise<AuditLogEntry> {
+  async get(id: string | number, options?: AuditLogGetOptions): Promise<AuditLogEntryV2> {
     const eActionLogId = eActionLogIdParam(id);
     const params: Record<string, unknown> = { eActionLogId };
     if (options?.sourceTableId != null) {
       assertSourceTableId(options.sourceTableId);
       params.sourceTableId = options.sourceTableId;
     }
-    return this.http.request<AuditLogEntry>('/ActionLog/ActionLogGetByIdV2', { params });
+    return this.http.request<AuditLogEntryV2>('/ActionLog/ActionLogGetByIdV2', { params });
   }
 
   /**

@@ -102,6 +102,13 @@ export interface AuditLogEntry {
   details?: Record<string, unknown>;
 }
 
+/**
+ * Row returned by `ActionLogGetByIdV2` (`auditLog.get()`). The V2 payload
+ * identifies the row by `actionLogId` / `eActionLogId` and carries no SDK
+ * `id`, so that field is omitted rather than typed as always present.
+ */
+export type AuditLogEntryV2 = Omit<AuditLogEntry, 'id'>;
+
 /** Optional query flags for `ActionLogGetByIdV2`. */
 export interface AuditLogGetOptions {
   /**
