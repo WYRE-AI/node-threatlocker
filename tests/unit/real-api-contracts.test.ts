@@ -224,7 +224,7 @@ describe('auditLog.get — ActionLogGetByIdV2 eActionLogId contract', () => {
 
   it('rejects a numeric actionLogId before any request', async () => {
     const seen = arm('enforce-500');
-    await expect(client.auditLog.get(48291)).rejects.toThrow(/eActionLogId/);
+    await expect(client.auditLog.get(48291 as unknown as string)).rejects.toThrow(/eActionLogId/);
     await expect(client.auditLog.get('48291')).rejects.toThrow(/HTTP 500/);
     await expect(client.auditLog.get('  48291  ')).rejects.toThrow(/numeric actionLogId/);
     expect(seen).toHaveLength(0);

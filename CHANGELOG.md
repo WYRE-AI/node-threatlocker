@@ -66,8 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `actionLogId` is the V1 `ActionLogGetById` key and is not read on V2, so
   ThreatLocker returned HTTP 500 (`Server error: 500` on
   `threatlocker_audit_get`; WYREAI-386 / threatlocker-mcp#63). `get()` now
-  sends `eActionLogId`, accepts a string id (whitespace trimmed), and
-  rejects a number, a numeric string, or a blank id before the request.
+  sends `eActionLogId`. **Breaking:** the public signature is
+  `get(id: string, options?)`. A number is no longer accepted by the type.
+  A number that still reaches the method at runtime, a numeric string, or
+  a blank id is rejected before the request. A non-numeric string is
+  trimmed.
   Optional `sourceTableId` (1–4) is forwarded only when the caller sets it.
   The `usenewsearch` header stays on `search()` only — `ActionLogGetByIdV2`
   does not declare it.
