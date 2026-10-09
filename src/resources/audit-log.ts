@@ -1,5 +1,12 @@
 import type { HttpClient } from '../http.js';
-import type { AuditLogEntry, AuditLogSearchParams, FileHistoryParams, PaginatedResponse } from '../types/index.js';
+import type {
+  AuditLogEntry,
+  AuditLogEntryV2,
+  AuditLogGetOptions,
+  AuditLogSearchParams,
+  FileHistoryParams,
+  PaginatedResponse,
+} from '../types/index.js';
 import { unwrapPaginatedResponse } from '../pagination.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -44,10 +51,29 @@ export class AuditLogResource {
     return unwrapPaginatedResponse<AuditLogEntry>(data, params.pageNumber ?? 1, params.pageSize ?? 25, pagination);
   }
 
-  async get(id: number): Promise<AuditLogEntry> {
-    return this.http.request<AuditLogEntry>('/ActionLog/ActionLogGetByIdV2', {
-      params: { actionLogId: id },
-    });
+  /**
+   * One audit row by its V2 id.
+   *
+   * `id` is the string `eActionLogId` from an audit search row.
+   * `GET /ActionLog/ActionLogGetByIdV2` takes that query param. The numeric
+   * `actionLogId` belongs to legacy `ActionLogGetById` and is not part of
+   * this signature — sending it (or omitting `eActionLogId`) is an HTTP 500
+   * from ThreatLocker. A number that still reaches this method at runtime
+   * is rejected before the request. Unlike `search()`, this operation does
+   * not take the `usenewsearch` header.
+   *
+   * `sourceTableId` is optional (1 ActionLog, 2 DenyActionLog,
+   * 3 BaselineActionLog, 4 EventLogActionLog). It is forwarded only when
+   * the caller sets it; a default of 2 would miss rows from the other tables.
+   */
+  async get(id: string, options?: AuditLogGetOptions): Promise<AuditLogEntryV2> {
+    const eActionLogId = eActionLogIdParam(id);
+    const params: Record<string, unknown> = { eActionLogId };
+    if (options?.sourceTableId != null) {
+      assertSourceTableId(options.sourceTableId);
+      params.sourceTableId = options.sourceTableId;
+    }
+    return this.http.request<AuditLogEntryV2>('/ActionLog/ActionLogGetByIdV2', { params });
   }
 
   /**
@@ -71,6 +97,38 @@ export class AuditLogResource {
     // unwrapped `{ logs }`; keep that shape as a fallback.
     if (Array.isArray(response)) return response;
     return response?.logs ?? [];
+  }
+}
+
+const AUDIT_GET_ID_ERROR =
+  'auditLog.get requires eActionLogId, the string id on an audit row. ' +
+  'ActionLogGetByIdV2 does not accept the numeric actionLogId (that key is ActionLogGetById / V1). ' +
+  'Sending the numeric id, or a blank id, on the V2 route returns HTTP 500. ' +
+  'Pass the eActionLogId string from auditLog.search().';
+
+const SOURCE_TABLE_ID_ERROR =
+  'auditLog.get sourceTableId must be 1 (ActionLog), 2 (DenyActionLog), 3 (BaselineActionLog), or 4 (EventLogActionLog).';
+
+/** Ids that are only digits are V1 `actionLogId` values, not `eActionLogId`. */
+const NUMERIC_ACTION_LOG_ID = /^-?\d+$/;
+
+function eActionLogIdParam(id: unknown): string {
+  // A number (or a numeric string from an MCP schema that says `string`) is
+  // the int64 actionLogId. Forwarding it as eActionLogId still 500s when
+  // ThreatLocker tries to resolve the V2 key. Reject before the request.
+  if (typeof id !== 'string') {
+    throw new Error(AUDIT_GET_ID_ERROR);
+  }
+  const trimmed = id.trim();
+  if (!trimmed || NUMERIC_ACTION_LOG_ID.test(trimmed)) {
+    throw new Error(AUDIT_GET_ID_ERROR);
+  }
+  return trimmed;
+}
+
+function assertSourceTableId(value: unknown): asserts value is 1 | 2 | 3 | 4 {
+  if (value !== 1 && value !== 2 && value !== 3 && value !== 4) {
+    throw new Error(SOURCE_TABLE_ID_ERROR);
   }
 }
 

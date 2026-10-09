@@ -124,9 +124,17 @@ export const handlers = [
 
   http.get(`${BASE_URL}/ActionLog/ActionLogGetByIdV2`, ({ request }) => {
     const url = new URL(request.url);
-    const id = url.searchParams.get('actionLogId');
+    // V2 binds eActionLogId. actionLogId is the V1 key and is not read here.
+    const eActionLogId = url.searchParams.get('eActionLogId');
+    if (!eActionLogId) {
+      return HttpResponse.json(
+        { LoggerId: 'x', StatusCode: 500, Message: 'A problem occurred with the request (x)' },
+        { status: 500 },
+      );
+    }
     return HttpResponse.json({
-      id: Number(id),
+      actionLogId: 1,
+      eActionLogId,
       actionType: 'application_blocked',
       timestamp: '2024-04-29T09:00:00Z',
       userId: 1,

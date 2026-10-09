@@ -85,16 +85,38 @@ export interface PermitApplication {
 
 // Audit Log types
 export interface AuditLogEntry {
-  // Note: ThreatLocker's ActionLogGetByIdV2 endpoint takes actionLogId as a
-  // GUID string (confirmed against the official Postman collection), not a
-  // numeric id — see AuditLogResource.get().
+  /**
+   * SDK field kept for older callers. Portal rows use `actionLogId` (int64)
+   * and `eActionLogId` (string). `auditLog.get()` sends `eActionLogId`.
+   */
   id: number;
+  /** Numeric id. Query key for legacy `ActionLogGetById`, not for V2 get. */
+  actionLogId?: number;
+  /** String id. Query key `eActionLogId` on `ActionLogGetByIdV2`. */
+  eActionLogId?: string | null;
   actionType: string;
   timestamp: string;
   userId?: number;
   computerId?: number;
   description: string;
   details?: Record<string, unknown>;
+}
+
+/**
+ * Row returned by `ActionLogGetByIdV2` (`auditLog.get()`). The V2 payload
+ * identifies the row by `actionLogId` / `eActionLogId` and carries no SDK
+ * `id`, so that field is omitted rather than typed as always present.
+ */
+export type AuditLogEntryV2 = Omit<AuditLogEntry, 'id'>;
+
+/** Optional query flags for `ActionLogGetByIdV2`. */
+export interface AuditLogGetOptions {
+  /**
+   * Source table of the row `eActionLogId` came from.
+   * 1 ActionLog, 2 DenyActionLog, 3 BaselineActionLog, 4 EventLogActionLog.
+   * Omitted unless the caller sets it.
+   */
+  sourceTableId?: 1 | 2 | 3 | 4;
 }
 
 export interface AuditLogSearchParams extends Partial<PaginationParams> {

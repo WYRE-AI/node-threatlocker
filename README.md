@@ -110,7 +110,7 @@ const client = new ThreatLockerClient({
 | `computers` | `list()`, `get(id)`, `getCheckins()` | Manage computers and check-ins |
 | `computerGroups` | `list()`, `getDropdown()` | Computer group management |
 | `approvalRequests` | `list()`, `get(id)`, `getPendingCount()`, `getPermitApplication(id)` | Application approval workflow |
-| `auditLog` | `search()`, `get(id)`, `getFileHistory({ fullPath, hostname \| computerId })` | Unified audit and action logs |
+| `auditLog` | `search()`, `get(eActionLogId)`, `getFileHistory({ fullPath, hostname \| computerId })` | Unified audit and action logs |
 | `organizations` | `listChildren()`, `getAuthKey()`, `listForMoveComputers()` | Organization management |
 
 ### Multi-Tenant Operations

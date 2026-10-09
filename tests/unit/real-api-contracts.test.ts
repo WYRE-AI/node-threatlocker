@@ -168,6 +168,84 @@ describe('auditLog.search — date-range + paramsFieldsDto + usenewsearch contra
   });
 });
 
+describe('auditLog.get — ActionLogGetByIdV2 eActionLogId contract', () => {
+  // Published Action Log OpenAPI:
+  //   ActionLogGetById     query actionLogId (int64) + sourceTableId
+  //   ActionLogGetByIdV2   query eActionLogId (string) + optional sourceTableId
+  // usenewsearch is a header parameter of ActionLogGetByParametersV2 (search)
+  // and is not declared on GetByIdV2. WYREAI-386 / threatlocker-mcp#63:
+  // get() sent actionLogId and ThreatLocker returned HTTP 500.
+  const E_ID = '550e8400-e29b-41d4-a716-446655440000';
+
+  const arm = (mode: 'ok' | 'enforce-500' = 'ok') => {
+    const seen: { url: URL; headers: Headers }[] = [];
+    server.use(
+      http.get(`${BASE_URL}/ActionLog/ActionLogGetByIdV2`, ({ request }) => {
+        const url = new URL(request.url);
+        seen.push({ url, headers: request.headers });
+        const eActionLogId = url.searchParams.get('eActionLogId');
+        const legacyId = url.searchParams.get('actionLogId');
+        if (mode === 'enforce-500' && (!eActionLogId || legacyId)) {
+          return HttpResponse.json(
+            { LoggerId: 'x', StatusCode: 500, Message: 'A problem occurred with the request (x)' },
+            { status: 500 },
+          );
+        }
+        return HttpResponse.json({ actionLogId: 1, eActionLogId, actionType: 'Execute' });
+      }),
+    );
+    return seen;
+  };
+
+  it('sends eActionLogId and does not send actionLogId or usenewsearch', async () => {
+    const seen = arm('enforce-500');
+    const result = await client.auditLog.get(E_ID);
+    const params = seen[0].url.searchParams;
+    expect(params.get('eActionLogId')).toBe(E_ID);
+    expect(params.get('actionLogId')).toBeNull();
+    expect(params.get('sourceTableId')).toBeNull();
+    expect(seen[0].headers.get('usenewsearch')).toBeNull();
+    expect(result).toMatchObject({ eActionLogId: E_ID, actionType: 'Execute' });
+  });
+
+  it('trims a string id and forwards sourceTableId when the caller sets it', async () => {
+    const seen = arm();
+    await client.auditLog.get(`  ${E_ID}  `, { sourceTableId: 1 });
+    expect(seen[0].url.searchParams.get('eActionLogId')).toBe(E_ID);
+    expect(seen[0].url.searchParams.get('sourceTableId')).toBe('1');
+  });
+
+  it('accepts a non-GUID eActionLogId string without reshaping it', async () => {
+    const seen = arm();
+    const opaque = 'abc+def/ghi=';
+    await client.auditLog.get(opaque);
+    expect(seen[0].url.searchParams.get('eActionLogId')).toBe(opaque);
+  });
+
+  it('rejects a numeric actionLogId before any request', async () => {
+    const seen = arm('enforce-500');
+    await expect(client.auditLog.get(48291 as unknown as string)).rejects.toThrow(/eActionLogId/);
+    await expect(client.auditLog.get('48291')).rejects.toThrow(/HTTP 500/);
+    await expect(client.auditLog.get('  48291  ')).rejects.toThrow(/numeric actionLogId/);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('rejects a blank id before any request', async () => {
+    const seen = arm('enforce-500');
+    await expect(client.auditLog.get('   ')).rejects.toThrow(/eActionLogId/);
+    await expect(client.auditLog.get('')).rejects.toThrow(/blank id/);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('rejects an out-of-range sourceTableId before any request', async () => {
+    const seen = arm('enforce-500');
+    await expect(
+      client.auditLog.get(E_ID, { sourceTableId: 99 as 1 }),
+    ).rejects.toThrow(/sourceTableId/);
+    expect(seen).toHaveLength(0);
+  });
+});
+
 describe('auditLog.getFileHistory — fullPath + hostname|computerId contract', () => {
   // OpenAPI (ActionLogGetAllForFileHistoryV2, "Get All File History by
   // hostname and fullpath") lists fullPath, hostname, and computerId (UUID)
