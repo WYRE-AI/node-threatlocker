@@ -1,5 +1,5 @@
 import type { HttpClient } from '../http.js';
-import type { Organization, OrganizationListParams, AuthKey, PaginatedResponse } from '../types/index.js';
+import type { Organization, OrganizationListParams, AuthKey, OrganizationGetAuthKeyOptions, PaginatedResponse } from '../types/index.js';
 import { buildSearchBody } from '../types/index.js';
 import { unwrapPaginatedResponse } from '../pagination.js';
 
@@ -18,8 +18,23 @@ export class OrganizationsResource {
     return unwrapPaginatedResponse<Organization>(data, body.pageNumber, body.pageSize, pagination);
   }
 
-  async getAuthKey(): Promise<AuthKey> {
-    return this.http.request<AuthKey>('/Organization/OrganizationGetAuthKeyById');
+  /**
+   * Auth key for an organization. The endpoint has no query params; scope is
+   * by `options.organizationId` (sent as `ManagedOrganizationId`). The live
+   * API may return a bare string or `{ organizationId, authKey }`; both are
+   * normalized so `authKey` and the deprecated `key` are both populated.
+   */
+  async getAuthKey(options?: OrganizationGetAuthKeyOptions): Promise<AuthKey> {
+    const response = await this.http.request<AuthKey | string>('/Organization/OrganizationGetAuthKeyById', {
+      managedOrganizationId: options?.organizationId,
+    });
+    if (typeof response === 'string') {
+      return { authKey: response, key: response, organizationId: options?.organizationId };
+    }
+    const result: AuthKey = { ...response };
+    if (result.authKey === undefined && result.key !== undefined) result.authKey = result.key;
+    if (result.key === undefined && result.authKey !== undefined) result.key = result.authKey;
+    return result;
   }
 
   async listForMoveComputers(): Promise<Organization[]> {

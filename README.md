@@ -110,8 +110,8 @@ const client = new ThreatLockerClient({
 | `computers` | `list()`, `get(id)`, `getCheckins()` | Manage computers and check-ins |
 | `computerGroups` | `list()`, `getDropdown()` | Computer group management |
 | `approvalRequests` | `list()`, `get(id)`, `getPendingCount()`, `getPermitApplication(id)` | Application approval workflow |
-| `auditLog` | `search()`, `get(eActionLogId)`, `getFileHistory({ fullPath, hostname \| computerId })` | Unified audit and action logs |
-| `organizations` | `listChildren()`, `getAuthKey()`, `listForMoveComputers()` | Organization management |
+| `auditLog` | `search()`, `get(eActionLogId, { sourceTableId, organizationId })`, `getFileHistory({ fullPath, hostname \| computerId })` | Unified audit and action logs |
+| `organizations` | `listChildren()`, `getAuthKey({ organizationId })`, `listForMoveComputers()` | Organization management |
 
 ### Multi-Tenant Operations
 
@@ -163,6 +163,30 @@ Built-in token bucket rate limiter with configurable limits:
 - **Default**: 10 requests/second
 - **Configurable**: Set `rateLimitPerSecond` in client config
 - **Automatic retry**: Rate-limited requests are automatically retried
+
+### Retry policy
+
+- Network errors and HTTP 502/503/504 (transient gateway errors) are retried with exponential backoff, up to `maxRetries`.
+- HTTP 500 is **not** retried by default: ThreatLocker returns it deterministically for bad ids or organization scope, so retrying only adds latency. Internal callers can opt in per request with `retryServerErrors: true` (`RequestOptions`).
+- `AuthenticationError` and `ServerError` messages include the request path, e.g. `Server error: 500 for /ActionLog/ActionLogGetByIdV2`.
+- `approvalRequests.*` 401s are rethrown with a hint to check the API user's Approval Center permissions.
+
+### Non-JSON responses
+
+A 2xx body is read as text: empty (or 204) returns `{}`, valid JSON is parsed even when sent as `text/plain`, and anything else is returned as the trimmed raw string.
+
+### Scoping lookups to an organization
+
+```typescript
+// Audit rows from child organizations carry organizationId / sourceTableId
+const row = await client.auditLog.get(entry.eActionLogId!, {
+  sourceTableId: 1,
+  organizationId: entry.organizationId, // sent as ManagedOrganizationId for this call
+});
+
+// Auth key for a specific organization (string or object responses are normalized)
+const { authKey } = await client.organizations.getAuthKey({ organizationId: '<org-guid>' });
+```
 
 ## Error Handling
 

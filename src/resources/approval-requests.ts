@@ -1,6 +1,7 @@
 import type { HttpClient } from '../http.js';
 import type { ApprovalRequest, ApprovalRequestListParams, PermitApplication, PaginatedResponse } from '../types/index.js';
 import { unwrapPaginatedResponse } from '../pagination.js';
+import { AuthenticationError } from '../errors.js';
 
 /**
  * Status name → statusId mapping, from the official endpoint reference
@@ -31,8 +32,23 @@ function resolveStatusId(status: string | undefined): number {
   return id;
 }
 
+const APPROVAL_AUTH_MESSAGE =
+  'Authentication failed (401) for ApprovalRequest endpoints. The API key was rejected for the Approval Center; ' +
+  'check that the ThreatLocker API user/role has Approval Center (approval request) view permissions for this organization.';
+
 export class ApprovalRequestsResource {
   constructor(private readonly http: HttpClient) {}
+
+  private async guardAuth<T>(call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (err) {
+      if (err instanceof AuthenticationError) {
+        throw new AuthenticationError(APPROVAL_AUTH_MESSAGE, err.response);
+      }
+      throw err;
+    }
+  }
 
   async list(params: ApprovalRequestListParams = {}): Promise<PaginatedResponse<ApprovalRequest>> {
     // Endpoint-specific body — this endpoint uses showChildOrganizations, not
@@ -46,33 +62,33 @@ export class ApprovalRequestsResource {
       searchText: params.searchText ?? '',
       showChildOrganizations: params.childOrganizations ?? false,
     };
-    const { data, pagination } = await this.http.requestWithMeta<any>('/ApprovalRequest/ApprovalRequestGetByParameters', {
+    const { data, pagination } = await this.guardAuth(() => this.http.requestWithMeta<any>('/ApprovalRequest/ApprovalRequestGetByParameters', {
       method: 'POST',
       body,
-    });
+    }));
     return unwrapPaginatedResponse<ApprovalRequest>(data, body.pageNumber, body.pageSize, pagination);
   }
 
   async get(id: number): Promise<ApprovalRequest> {
-    return this.http.request<ApprovalRequest>('/ApprovalRequest/ApprovalRequestGetById', {
+    return this.guardAuth(() => this.http.request<ApprovalRequest>('/ApprovalRequest/ApprovalRequestGetById', {
       params: { approvalRequestId: id },
-    });
+    }));
   }
 
   async getPendingCount(params: { includeChildOrganizations?: boolean } = {}): Promise<number> {
     // The endpoint returns a bare integer (live-verified), not an object.
-    const response = await this.http.request<number | { count?: number }>('/ApprovalRequest/ApprovalRequestGetCount', {
+    const response = await this.guardAuth(() => this.http.request<number | { count?: number }>('/ApprovalRequest/ApprovalRequestGetCount', {
       params: params.includeChildOrganizations !== undefined
         ? { includeChildOrganizations: params.includeChildOrganizations }
         : undefined,
-    });
+    }));
     if (typeof response === 'number') return response;
     return response?.count ?? 0;
   }
 
   async getPermitApplication(id: number): Promise<PermitApplication> {
-    return this.http.request<PermitApplication>('/ApprovalRequest/ApprovalRequestGetPermitApplicationById', {
+    return this.guardAuth(() => this.http.request<PermitApplication>('/ApprovalRequest/ApprovalRequestGetPermitApplicationById', {
       params: { approvalRequestId: id },
-    });
+    }));
   }
 }

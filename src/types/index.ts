@@ -100,6 +100,17 @@ export interface AuditLogEntry {
   computerId?: number;
   description: string;
   details?: Record<string, unknown>;
+  /**
+   * Source table of the row (1 ActionLog, 2 DenyActionLog, 3 BaselineActionLog,
+   * 4 EventLogActionLog). Pass to `auditLog.get()` as `sourceTableId`.
+   */
+  sourceTableId?: number;
+  /**
+   * GUID of the organization that owns the row. Rows from
+   * `ActionLogGetByParametersV2` carry it; pass it to `auditLog.get()` as
+   * `organizationId` to scope the lookup (needed for child-organization rows).
+   */
+  organizationId?: string;
 }
 
 /**
@@ -117,6 +128,11 @@ export interface AuditLogGetOptions {
    * Omitted unless the caller sets it.
    */
   sourceTableId?: 1 | 2 | 3 | 4;
+  /**
+   * GUID of the organization that owns the row. Sent as the
+   * `ManagedOrganizationId` header for this request only.
+   */
+  organizationId?: string;
 }
 
 export interface AuditLogSearchParams extends Partial<PaginationParams> {
@@ -170,6 +186,16 @@ export interface OrganizationListParams extends Partial<PaginationParams> {
 }
 
 export interface AuthKey {
-  key: string;
-  organizationId: number;
+  /** The organization's auth key (the live API field). */
+  authKey?: string;
+  /** Organization GUID (live API) or legacy numeric id. */
+  organizationId?: string | number;
+  /** @deprecated use authKey */
+  key?: string;
+}
+
+/** Options for `organizations.getAuthKey()`. */
+export interface OrganizationGetAuthKeyOptions {
+  /** GUID of the organization whose auth key to fetch (sent as ManagedOrganizationId). */
+  organizationId?: string;
 }
