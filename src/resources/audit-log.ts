@@ -65,6 +65,12 @@ export class AuditLogResource {
    * `sourceTableId` is optional (1 ActionLog, 2 DenyActionLog,
    * 3 BaselineActionLog, 4 EventLogActionLog). It is forwarded only when
    * the caller sets it; a default of 2 would miss rows from the other tables.
+   *
+   * `organizationId` (GUID) is the organization that owns the row. `search()`
+   * can return child-organization rows; pass the row's `organizationId` so the
+   * lookup is scoped to it (sent as `ManagedOrganizationId` for this request).
+   * HTTP 500 is not retried — ThreatLocker returns it deterministically for a
+   * bad id or scope.
    */
   async get(id: string, options?: AuditLogGetOptions): Promise<AuditLogEntryV2> {
     const eActionLogId = eActionLogIdParam(id);
@@ -73,7 +79,14 @@ export class AuditLogResource {
       assertSourceTableId(options.sourceTableId);
       params.sourceTableId = options.sourceTableId;
     }
-    return this.http.request<AuditLogEntryV2>('/ActionLog/ActionLogGetByIdV2', { params });
+    let managedOrganizationId: string | undefined;
+    if (options?.organizationId != null) {
+      managedOrganizationId = nonEmptyString(options.organizationId);
+      if (!managedOrganizationId) {
+        throw new Error('auditLog.get organizationId must be a non-empty string (organization GUID).');
+      }
+    }
+    return this.http.request<AuditLogEntryV2>('/ActionLog/ActionLogGetByIdV2', { params, managedOrganizationId });
   }
 
   /**

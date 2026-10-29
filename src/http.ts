@@ -23,6 +23,18 @@ export interface RequestOptions {
   body?: unknown;
   /** Extra request headers (e.g. ActionLog V2 requires `usenewsearch: true`). */
   headers?: Record<string, string>;
+  /**
+   * Organization GUID sent as the `ManagedOrganizationId` header for this one
+   * request, overriding the client-level `organizationId`.
+   */
+  managedOrganizationId?: string;
+  /**
+   * Also retry HTTP 500 (default false). Retry policy: network errors and
+   * 502/503/504 (transient gateway errors) are retried with backoff. 500 is
+   * NOT retried by default — ThreatLocker returns it deterministically for bad
+   * ids or organization scope, so retrying only multiplies latency.
+   */
+  retryServerErrors?: boolean;
 }
 
 /** Shape of the `pagination` response header portalapi sets on list endpoints. */
@@ -100,8 +112,9 @@ export class HttpClient {
       // OpenAPI security schemes and official docs) — NOT `OrganizationId`,
       // which the API does not recognize and silently ignores, causing
       // requests to fall back to the API key's default/home organization.
-      if (this.organizationId) {
-        headers['ManagedOrganizationId'] = this.organizationId;
+      const orgScope = options.managedOrganizationId || this.organizationId;
+      if (orgScope) {
+        headers['ManagedOrganizationId'] = orgScope;
       }
 
       if (body) headers['Content-Type'] = 'application/json';
@@ -125,11 +138,16 @@ export class HttpClient {
           try { pagination = JSON.parse(paginationHeader) as PaginationMeta; } catch { /* malformed header — ignore */ }
         }
         if (response.status === 204) return { data: {} as T, pagination };
-        const contentType = response.headers.get('content-type');
-        if (contentType?.includes('application/json')) {
-          return { data: (await response.json()) as T, pagination };
+        // Some endpoints send JSON as text/plain (or without a content-type)
+        // and some send a bare string; read as text, parse if possible, and
+        // otherwise return the trimmed raw string.
+        const text = (await response.text()).trim();
+        if (!text) return { data: {} as T, pagination };
+        try {
+          return { data: JSON.parse(text) as T, pagination };
+        } catch {
+          return { data: text as unknown as T, pagination };
         }
-        return { data: {} as T, pagination };
       }
 
       // Read body safely (text first, then parse)
@@ -142,7 +160,7 @@ export class HttpClient {
         case 400:
           throw new ValidationError('Bad request', [], responseBody);
         case 401:
-          throw new AuthenticationError('Authentication failed', responseBody);
+          throw new AuthenticationError(`Authentication failed (401) for ${path}`, responseBody);
         case 403:
           throw new ForbiddenError('Forbidden', responseBody);
         case 404:
@@ -157,8 +175,11 @@ export class HttpClient {
         }
         default:
           if (response.status >= 500) {
-            lastError = new ServerError(`Server error: ${response.status}`, responseBody);
-            if (attempt < this.maxRetries) continue;
+            lastError = new ServerError(`Server error: ${response.status} for ${path}`, responseBody);
+            const retryable =
+              response.status === 502 || response.status === 503 || response.status === 504 ||
+              (response.status === 500 && options.retryServerErrors === true);
+            if (retryable && attempt < this.maxRetries) continue;
             throw lastError;
           }
           throw new ServiceError(`HTTP ${response.status}`, response.status, responseBody);
