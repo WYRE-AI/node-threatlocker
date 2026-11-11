@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+- Added: `auditLog.search()` accepts `actionId` (1 Permit, 2 Deny, 3 Deny with option to request, 6 Ringfenced, 99 Any Deny), `onlyTrueDenies`, `simulateDeny` and `groupBys`, so denies can be filtered and counted by policy or action type. `actionType` is now trimmed.
 - Added: per-request ManagedOrganizationId / audit row organizationId+sourceTableId fields
 - Fixed: non-JSON 2xx bodies kept; auth-key string/object normalization
 - Changed: HTTP 500 not retried by default; path-aware 401/5xx; AuthKey.key optional/deprecated alias

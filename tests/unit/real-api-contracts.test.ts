@@ -166,6 +166,39 @@ describe('auditLog.search — date-range + paramsFieldsDto + usenewsearch contra
     expect(seen[0].body.startDate).toBe('2026-08-01T00:00:00Z');
     expect(seen[0].body.endDate).toBe('2026-08-09T00:00:00Z');
   });
+
+  it('sends actionId, actionType and groupBys for a deny breakdown', async () => {
+    const seen = arm();
+    await client.auditLog.search({ actionId: 2, actionType: ' execute ', groupBys: [6, 9] });
+    expect(seen[0].body).toMatchObject({ actionId: 2, actionType: 'execute', groupBys: [6, 9] });
+  });
+
+  it('leaves the action filters out when they are not set', async () => {
+    const seen = arm();
+    await client.auditLog.search();
+    for (const key of ['actionId', 'actionType', 'groupBys', 'onlyTrueDenies', 'simulateDeny']) {
+      expect(seen[0].body).not.toHaveProperty(key);
+    }
+  });
+
+  it('fills in actionId 99 for onlyTrueDenies and simulateDeny', async () => {
+    const seen = arm();
+    await client.auditLog.search({ onlyTrueDenies: true });
+    await client.auditLog.search({ simulateDeny: true, actionId: 99 });
+    expect(seen[0].body).toMatchObject({ actionId: 99, onlyTrueDenies: true });
+    expect(seen[1].body).toMatchObject({ actionId: 99, simulateDeny: true });
+  });
+
+  it('rejects bad action filters before any request', async () => {
+    const seen = arm();
+    await expect(client.auditLog.search({ actionId: 4 as never })).rejects.toThrow(/actionId/);
+    await expect(client.auditLog.search({ onlyTrueDenies: true, actionId: 2 })).rejects.toThrow(/99/);
+    await expect(client.auditLog.search({ onlyTrueDenies: true, simulateDeny: true })).rejects.toThrow(/not both/);
+    await expect(client.auditLog.search({ groupBys: [] })).rejects.toThrow(/groupBys/);
+    await expect(client.auditLog.search({ groupBys: [1, 2, 3] })).rejects.toThrow(/groupBys/);
+    await expect(client.auditLog.search({ groupBys: [1.5] })).rejects.toThrow(/groupBys/);
+    expect(seen).toHaveLength(0);
+  });
 });
 
 describe('auditLog.get — ActionLogGetByIdV2 eActionLogId contract', () => {

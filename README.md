@@ -61,9 +61,20 @@ const groups = await client.computerGroups.list({
 
 // Search audit logs
 const { items: logs } = await client.auditLog.search({
-  actionType: 'application_blocked',
+  actionType: 'execute', // execute, install, network, registry, read, write, ... (exact match)
   fromDate: '2024-01-01',
   toDate: '2024-12-31',
+});
+
+// Count denies by policy name and action type. actionId: 1 Permit, 2 Deny,
+// 3 Deny (Option to Request), 6 Ringfenced, 99 Any Deny. groupBys takes one
+// or two field ids (5 Policy Id, 6 Policy Name, 9 Action Type, 17 Asset Name);
+// each row then carries groupByCount.
+const { items: denyCounts } = await client.auditLog.search({
+  actionId: 2,
+  groupBys: [6, 9],
+  startDate: '2026-11-01T00:00:00Z',
+  endDate: '2026-11-08T00:00:00Z',
 });
 
 // File history for one path. fullPath plus hostname or computerId is required;

@@ -20,6 +20,52 @@ function toIsoSeconds(value: string | Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+const ACTION_IDS: readonly number[] = [1, 2, 3, 6, 99];
+const ANY_DENY = 99;
+
+/**
+ * actionId / onlyTrueDenies / simulateDeny for ActionLogGetByParametersV2
+ * (threatlocker.kb.help/unified-audit-portalapiactionlog). Both deny flags
+ * require actionId 99 ("Any Deny"); it is filled in when the caller omits it.
+ */
+function actionFilters(params: AuditLogSearchParams): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const { actionId, onlyTrueDenies, simulateDeny } = params;
+  if (actionId != null && !ACTION_IDS.includes(actionId)) {
+    throw new Error(
+      `auditLog.search actionId must be one of 1 (Permit), 2 (Deny), 3 (Deny with option to request), ` +
+        `6 (Ringfenced) or 99 (Any Deny); got ${String(actionId)}.`,
+    );
+  }
+  if (onlyTrueDenies && simulateDeny) {
+    throw new Error('auditLog.search: set onlyTrueDenies or simulateDeny, not both.');
+  }
+  const denyFlag = onlyTrueDenies === true || simulateDeny === true;
+  if (denyFlag && actionId != null && actionId !== ANY_DENY) {
+    throw new Error('auditLog.search: onlyTrueDenies and simulateDeny require actionId 99 (Any Deny).');
+  }
+  const resolvedActionId = actionId ?? (denyFlag ? ANY_DENY : undefined);
+  if (resolvedActionId != null) out.actionId = resolvedActionId;
+  if (onlyTrueDenies === true) out.onlyTrueDenies = true;
+  if (simulateDeny === true) out.simulateDeny = true;
+  return out;
+}
+
+function groupBysParam(groupBys: unknown): number[] {
+  if (
+    !Array.isArray(groupBys) ||
+    groupBys.length < 1 ||
+    groupBys.length > 2 ||
+    !groupBys.every((g) => Number.isInteger(g) && g > 0)
+  ) {
+    throw new Error(
+      'auditLog.search groupBys must be an array of one or two positive integer field ids ' +
+        '(for example [6] Policy Name or [6, 9] Policy Name + Action Type).',
+    );
+  }
+  return groupBys;
+}
+
 export class AuditLogResource {
   constructor(private readonly http: HttpClient) {}
 
@@ -41,8 +87,11 @@ export class AuditLogResource {
       showChildOrganizations: params.childOrganizations ?? false,
     };
     if (params.searchText) body.fullPath = params.searchText;
-    if (params.actionType) body.actionType = params.actionType;
+    const actionType = nonEmptyString(params.actionType);
+    if (actionType) body.actionType = actionType;
     if (params.hostname) body.hostname = params.hostname;
+    Object.assign(body, actionFilters(params));
+    if (params.groupBys != null) body.groupBys = groupBysParam(params.groupBys);
 
     const { data, pagination } = await this.http.requestWithMeta<any>('/ActionLog/ActionLogGetByParametersV2', {
       method: 'POST',
