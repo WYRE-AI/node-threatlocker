@@ -189,6 +189,18 @@ describe('auditLog.search — date-range + paramsFieldsDto + usenewsearch contra
     expect(seen[1].body).toMatchObject({ actionId: 99, simulateDeny: true });
   });
 
+  it('sends the documented paramsFieldsDto predicate with each deny-type flag', async () => {
+    const seen = arm();
+    await client.auditLog.search({ onlyTrueDenies: true });
+    await client.auditLog.search({ simulateDeny: true });
+    await client.auditLog.search({ actionId: 2 });
+    expect(seen[0].body.paramsFieldsDto).toEqual([
+      { fieldAttributeId: 34, fieldType: 1, filterType: 1, name: 'MonitorOnly', value: 'false' },
+    ]);
+    expect(seen[1].body.paramsFieldsDto).toEqual([{ filterType: 1, name: 'filter', value: 'monitoronly' }]);
+    expect(seen[2].body.paramsFieldsDto).toEqual([]);
+  });
+
   it('rejects bad action filters before any request', async () => {
     const seen = arm();
     await expect(client.auditLog.search({ actionId: 4 as never })).rejects.toThrow(/actionId/);

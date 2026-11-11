@@ -46,10 +46,29 @@ function actionFilters(params: AuditLogSearchParams): Record<string, unknown> {
   }
   const resolvedActionId = actionId ?? (denyFlag ? ANY_DENY : undefined);
   if (resolvedActionId != null) out.actionId = resolvedActionId;
-  if (onlyTrueDenies === true) out.onlyTrueDenies = true;
-  if (simulateDeny === true) out.simulateDeny = true;
+  // Each deny-type flag also needs its paramsFieldsDto predicate (same KB page).
+  if (onlyTrueDenies === true) {
+    out.onlyTrueDenies = true;
+    out.paramsFieldsDto = [TRUE_DENY_PREDICATE];
+  }
+  if (simulateDeny === true) {
+    out.simulateDeny = true;
+    out.paramsFieldsDto = [SIMULATED_DENY_PREDICATE];
+  }
   return out;
 }
+
+/** paramsFieldsDto predicate for enforced ("true") denies. */
+const TRUE_DENY_PREDICATE = {
+  fieldAttributeId: 34,
+  fieldType: 1,
+  filterType: 1,
+  name: 'MonitorOnly',
+  value: 'false',
+} as const;
+
+/** paramsFieldsDto predicate for simulated (monitor-only) denies. */
+const SIMULATED_DENY_PREDICATE = { filterType: 1, name: 'filter', value: 'monitoronly' } as const;
 
 function groupBysParam(groupBys: unknown): number[] {
   if (
