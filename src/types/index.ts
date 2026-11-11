@@ -209,6 +209,13 @@ export interface FileHistoryParams {
   sourceTableId?: number;
   pageNumber?: number;
   pageSize?: number;
+  /**
+   * GUID of the organization that owns the computer. Sent as the
+   * `ManagedOrganizationId` header for this request only (not as a query
+   * param). Without it the lookup runs in the API key's own organization, so a
+   * computer in a child organization returns an empty history.
+   */
+  organizationId?: string;
 }
 
 // Organization types

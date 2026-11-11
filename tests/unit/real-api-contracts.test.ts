@@ -349,6 +349,44 @@ describe('auditLog.getFileHistory — fullPath + hostname|computerId contract', 
     expect(params.get('pageSize')).toBe('50');
   });
 
+  it('sends organizationId as the ManagedOrganizationId header, not as a query param', async () => {
+    const captured: { org?: string | null; orgQuery?: string | null } = {};
+    server.use(
+      http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, ({ request }) => {
+        captured.org = request.headers.get('ManagedOrganizationId');
+        captured.orgQuery = new URL(request.url).searchParams.get('organizationId');
+        return HttpResponse.json([]);
+      }),
+    );
+    await client.auditLog.getFileHistory({
+      fullPath: 'C:\\app.exe',
+      hostname: 'WS-01',
+      organizationId: '  0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8  ',
+    });
+    expect(captured.org).toBe('0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8');
+    expect(captured.orgQuery).toBeNull();
+  });
+
+  it('sends no ManagedOrganizationId header when organizationId is omitted', async () => {
+    const captured: { org?: string | null } = {};
+    server.use(
+      http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, ({ request }) => {
+        captured.org = request.headers.get('ManagedOrganizationId');
+        return HttpResponse.json([]);
+      }),
+    );
+    await client.auditLog.getFileHistory({ fullPath: 'C:\\app.exe', hostname: 'WS-01' });
+    expect(captured.org).toBeNull();
+  });
+
+  it('rejects a blank organizationId before any request', async () => {
+    const seen = arm();
+    await expect(
+      client.auditLog.getFileHistory({ fullPath: 'C:\\app.exe', hostname: 'WS-01', organizationId: '   ' }),
+    ).rejects.toThrow(/organizationId/);
+    expect(seen).toHaveLength(0);
+  });
+
   it('unwraps a { logs } body as well as a bare array', async () => {
     server.use(
       http.get(`${BASE_URL}/ActionLog/ActionLogGetAllForFileHistoryV2`, () =>

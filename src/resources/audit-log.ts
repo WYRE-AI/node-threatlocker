@@ -149,12 +149,24 @@ export class AuditLogResource {
    * API returns HTTP 417 "Missing Parameters. Unable to load details." unless
    * `fullPath` and at least one of `hostname` or `computerId` are sent.
    * Incomplete calls throw here and are not sent.
+   *
+   * `organizationId` (GUID) is the organization that owns the computer. It is
+   * sent as `ManagedOrganizationId` for this request, like `get()`. Without it
+   * the lookup runs in the API key's organization and a computer in a child
+   * organization returns an empty history.
    */
   async getFileHistory(params: FileHistoryParams): Promise<AuditLogEntry[]> {
     const query = fileHistoryQuery(params);
+    let managedOrganizationId: string | undefined;
+    if (params.organizationId != null) {
+      managedOrganizationId = nonEmptyString(params.organizationId);
+      if (!managedOrganizationId) {
+        throw new Error('auditLog.getFileHistory organizationId must be a non-empty string (organization GUID).');
+      }
+    }
     const response = await this.http.request<AuditLogEntry[] | { logs?: AuditLogEntry[] }>(
       '/ActionLog/ActionLogGetAllForFileHistoryV2',
-      { params: query },
+      { params: query, managedOrganizationId },
     );
     // Sibling list endpoints return a bare JSON array. This method originally
     // unwrapped `{ logs }`; keep that shape as a fallback.
