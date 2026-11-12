@@ -111,6 +111,11 @@ export interface AuditLogEntry {
    * `organizationId` to scope the lookup (needed for child-organization rows).
    */
   organizationId?: string;
+  /**
+   * Present when the search used `groupBys`. Count of matching rows in this
+   * group (for example denies per policy name and action type).
+   */
+  groupByCount?: number;
 }
 
 /**

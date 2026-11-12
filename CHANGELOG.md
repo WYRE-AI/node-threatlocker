@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+- Added: `AuditLogEntry.groupByCount` so grouped `auditLog.search()` results are typed
 - Added: `auditLog.search()` accepts `actionId` (1 Permit, 2 Deny, 3 Deny with option to request, 6 Ringfenced, 99 Any Deny), `onlyTrueDenies`, `simulateDeny` and `groupBys`, so denies can be filtered and counted by policy or action type. `actionType` is now trimmed.
 - Fixed: `auditLog.getFileHistory()` accepts `organizationId` and sends it as the `ManagedOrganizationId` header, so file history works for computers in child organizations (it returned an empty array for them)
 - Added: per-request ManagedOrganizationId / audit row organizationId+sourceTableId fields

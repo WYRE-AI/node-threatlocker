@@ -173,6 +173,26 @@ describe('auditLog.search — date-range + paramsFieldsDto + usenewsearch contra
     expect(seen[0].body).toMatchObject({ actionId: 2, actionType: 'execute', groupBys: [6, 9] });
   });
 
+  it('exposes groupByCount on grouped search rows', async () => {
+    server.use(
+      http.post(`${BASE_URL}/ActionLog/ActionLogGetByParametersV2`, async ({ request }) => {
+        const body: any = await request.json();
+        if (!body.startDate || !body.endDate) {
+          return HttpResponse.json(
+            { LoggerId: 'x', StatusCode: 417, Message: 'Invalid Date Range' },
+            { status: 417 },
+          );
+        }
+        return HttpResponse.json(
+          [{ actionType: 'Execute', policyName: 'Block USB', groupByCount: 42 }],
+          { headers: { pagination: paginationHeader(1) } },
+        );
+      }),
+    );
+    const { items } = await client.auditLog.search({ actionId: 2, groupBys: [6, 9] });
+    expect(items[0]?.groupByCount).toBe(42);
+  });
+
   it('leaves the action filters out when they are not set', async () => {
     const seen = arm();
     await client.auditLog.search();
