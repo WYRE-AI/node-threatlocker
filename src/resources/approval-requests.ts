@@ -64,6 +64,7 @@ export class ApprovalRequestsResource {
     };
     const { data, pagination } = await this.guardAuth(() => this.http.requestWithMeta<any>('/ApprovalRequest/ApprovalRequestGetByParameters', {
       method: 'POST',
+      idempotent: true, // read-only search
       body,
     }));
     return unwrapPaginatedResponse<ApprovalRequest>(data, body.pageNumber, body.pageSize, pagination);

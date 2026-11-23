@@ -14,6 +14,7 @@ export class OrganizationsResource {
     const body = buildSearchBody({ childOrganizations: true, ...params });
     const { data, pagination } = await this.http.requestWithMeta<any>('/Organization/OrganizationGetChildOrganizationsByParameters', {
       method: 'POST',
+      idempotent: true, // read-only search
       body,
     });
     return unwrapPaginatedResponse<Organization>(data, body.pageNumber, body.pageSize, pagination);

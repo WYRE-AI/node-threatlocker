@@ -1,4 +1,5 @@
 import { RateLimiter } from './rate-limiter.js';
+import { parseRetryAfter, retryDelayMs } from './rate-limit.js';
 import {
   ServiceError,
   AuthenticationError,
@@ -8,6 +9,9 @@ import {
   ServerError,
   ValidationError,
 } from './errors.js';
+
+/** Wait reported in a RateLimitError when the 429 has no Retry-After. */
+const DEFAULT_RETRY_AFTER_SECONDS = 60;
 
 export interface HttpClientConfig {
   baseUrl: string;
@@ -35,6 +39,14 @@ export interface RequestOptions {
    * ids or organization scope, so retrying only multiplies latency.
    */
   retryServerErrors?: boolean;
+  /**
+   * The request is safe to send again (it only reads). Defaults to true for
+   * GET/HEAD/OPTIONS and false otherwise. ThreatLocker does not document
+   * that a rate-limited or failed write had no effect, so a request that is
+   * not idempotent is never replayed: a 429, 5xx or network error fails at
+   * once. Read-only searches sent as POST set this to true.
+   */
+  idempotent?: boolean;
 }
 
 /** Shape of the `pagination` response header portalapi sets on list endpoints. */
@@ -72,6 +84,7 @@ export class HttpClient {
    */
   async requestWithMeta<T>(path: string, options: RequestOptions = {}): Promise<{ data: T; pagination?: PaginationMeta }> {
     const { method = 'GET', params, body } = options;
+    const replaySafe = options.idempotent ?? ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
 
     let url = `${this.baseUrl}${path}`;
     if (params) {
@@ -92,9 +105,13 @@ export class HttpClient {
     }
 
     let lastError: Error | null = null;
+    let rateLimitDelayMs: number | undefined;
+    let rateLimitRetries = 0;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (attempt > 0) {
-        const delay = Math.min(1000 * 2 ** (attempt - 1), 30_000);
+        // A 429 sets its own (bounded) wait; everything else backs off.
+        const delay = rateLimitDelayMs ?? Math.min(1000 * 2 ** (attempt - 1), 30_000);
+        rateLimitDelayMs = undefined;
         await new Promise(r => setTimeout(r, delay));
       }
 
@@ -128,6 +145,7 @@ export class HttpClient {
         });
       } catch (err) {
         lastError = err as Error;
+        if (!replaySafe) throw lastError;
         continue;
       }
 
@@ -166,20 +184,36 @@ export class HttpClient {
         case 404:
           throw new NotFoundError('Resource not found', responseBody);
         case 429: {
-          const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
-          if (attempt < this.maxRetries) {
-            await new Promise(r => setTimeout(r, retryAfter * 1000));
+          // Retried at most once, and only for a Retry-After of at most 10 s
+          // (see rate-limit.ts). With no Retry-After, or a longer one, the
+          // error is thrown at once; the 60 s reported then is never a delay.
+          const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+          const delay = retryDelayMs(rateLimitRetries, retryAfterMs);
+          if (replaySafe && delay !== undefined && attempt < this.maxRetries) {
+            rateLimitRetries++;
+            rateLimitDelayMs = delay;
             continue;
           }
-          throw new RateLimitError('Rate limit exceeded', retryAfter, responseBody);
+          const retryAfter =
+            retryAfterMs === undefined ? DEFAULT_RETRY_AFTER_SECONDS : Math.max(1, Math.ceil(retryAfterMs / 1000));
+          throw new RateLimitError(
+            `ThreatLocker rate-limited the request (HTTP 429) for ${path}. Try again in ${retryAfter} s.`,
+            retryAfter,
+            responseBody,
+          );
         }
         default:
           if (response.status >= 500) {
-            lastError = new ServerError(`Server error: ${response.status} for ${path}`, responseBody, response.status);
+            // A 503 that carries Retry-After keeps the requested wait in the error.
+            const retryAfterMs =
+              response.status === 503 ? parseRetryAfter(response.headers.get('retry-after')) : undefined;
+            const wait =
+              retryAfterMs === undefined ? '' : `. Try again in ${Math.max(1, Math.ceil(retryAfterMs / 1000))} s.`;
+            lastError = new ServerError(`Server error: ${response.status} for ${path}${wait}`, responseBody, response.status);
             const retryable =
               response.status === 502 || response.status === 503 || response.status === 504 ||
               (response.status === 500 && options.retryServerErrors === true);
-            if (retryable && attempt < this.maxRetries) continue;
+            if (retryable && replaySafe && attempt < this.maxRetries) continue;
             throw lastError;
           }
           throw new ServiceError(`HTTP ${response.status}`, response.status, responseBody);

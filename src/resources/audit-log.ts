@@ -114,6 +114,7 @@ export class AuditLogResource {
 
     const { data, pagination } = await this.http.requestWithMeta<any>('/ActionLog/ActionLogGetByParametersV2', {
       method: 'POST',
+      idempotent: true, // read-only search
       body,
       headers: { usenewsearch: 'true' },
     });
