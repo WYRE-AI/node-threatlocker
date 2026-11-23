@@ -10,6 +10,7 @@ export class ComputersResource {
     const body = buildSearchBody(params);
     const { data, pagination } = await this.http.requestWithMeta<any>('/Computer/ComputerGetByAllParameters', {
       method: 'POST',
+      idempotent: true, // read-only search
       body,
     });
     return unwrapPaginatedResponse<Computer>(data, body.pageNumber, body.pageSize, pagination);
@@ -37,6 +38,7 @@ export class ComputersResource {
     };
     const { data, pagination } = await this.http.requestWithMeta<any>('/ComputerCheckin/ComputerCheckinGetByParameters', {
       method: 'POST',
+      idempotent: true, // read-only search
       body,
     });
     return unwrapPaginatedResponse<ComputerCheckin>(data, pageNumber, pageSize, pagination);
